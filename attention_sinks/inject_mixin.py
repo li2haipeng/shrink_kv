@@ -131,14 +131,14 @@ class InjectAttentionSinksMixin:
                 outputs = old_forward(*args, **kwargs)
                 
                 if mode == "2":
-                    print("our mode")
+                    # print("our mode")
                     module.update_kv_cache = UpdateKVCache(outputs.attentions)
                     outputs.past_key_values = self.update_kv_cache(outputs.past_key_values)
                 elif mode == "1":
-                    print("attention_sink mode")
+                    # print("attention_sink mode")
                     outputs.past_key_values = self.attention_sink_kv_cache(outputs.past_key_values)
                 else:
-                    print("transformers mode")
+                    # print("transformers mode")
                     pass
                 # print(outputs.past_key_values[0][0].size())
                 return outputs

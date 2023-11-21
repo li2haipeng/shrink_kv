@@ -10,7 +10,7 @@ sys.path.append("..")
 import torch.distributed as dist
 from attention_sinks.group_token_pruning import prompt_token_selection
 from collections import OrderedDict
-
+import json
 # from token_pruning_llama import LlamaForCausalLM
 from attention_sinks import LlamaForCausalLM
 from transformers import LlamaTokenizer
@@ -33,9 +33,10 @@ def nvidia_smi():
 
 # batch_size = int(sys.argv[1])
 batch_size = 1
-# model_name = "NousResearch/Llama-2-7b-hf"
+# model_name = "NousResearch/Llama-2-13b-hf"
 model_name = "/home/ubuntu/hummingbird/data/llama2-70b-hf"
-
+m = model_name.split("/")[-1]
+print(f"loading {m}...")
 generation_config = GenerationConfig(
     # top_p=0.75,
     num_beams=1,
@@ -59,7 +60,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 kwargs = {
     "attention_sink_size": 4,
     "attention_sink_window_size": 252,  # default: 1020
-    "attention_sink_mode": "0"
+    "attention_sink_mode": "2"
 }
 model = LlamaForCausalLM.from_pretrained(
    model_name, 
@@ -109,22 +110,23 @@ if tokenizer.pad_token is None:
 model.resize_token_embeddings(len(tokenizer))
 
 
-dataset = load_dataset('lambada', split='validation[:1000]')
+dataset = load_dataset('lambada', split='validation[:100]')
 iterations = 1
+max_tokens = 128
 print("start...")
 
-outputs = OrderedDict()
+results = OrderedDict()
 for inp in dataset:
     inp_text = inp['text']
     inputs = tokenizer(inp_text, return_tensors="pt")["input_ids"]
-
+    print(f"Prompt: {inp_text}")
     for i in range(iterations):
         t0 = time.time()
-        print("run:", i)
+        # print(f"============{i} run==============")
 
         outputs = model.generate(
                 input_ids=inputs.to(model.device),
-                max_new_tokens=128, 
+                max_new_tokens=max_tokens, 
                 pad_token_id=tokenizer.eos_token_id,
             #   generation_config = generation_config
             )
@@ -135,9 +137,10 @@ for inp in dataset:
         # print(torch.cuda.memory_summary())
 
         # tokens_gen_text = len(generated_tokens[0]) - inputs.shape[1]
-
-        # print("Response: {}".format(tokenizer.decode(generated_tokens[0, :])))
-
+        response = tokenizer.decode(generated_tokens[0, inputs.shape[1]:])
+        print(f"Response: {response}")
+        results[inp_text] = response
+    print(f"======={len(results), time.time()-t0}====================")
         # throughput = (tokens_gen_text * batch_size) / ((t1 - t0))
 
         # # view results
@@ -145,3 +148,6 @@ for inp in dataset:
         # Time: {t1 - t0:.1f} seconds
         # Tokens per second: {throughput:.1f}
         # Latency: {1000 / throughput:.1f} ms""")
+m = model_name.split("/")[-1]
+with open(f"our_full_{max_tokens}_{m}.json", 'w') as f:
+    f.write(json.dumps(results))

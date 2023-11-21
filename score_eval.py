@@ -1,15 +1,56 @@
 from evaluate import load
+import json
+from difflib import SequenceMatcher
+from collections import OrderedDict
+import numpy as np
+
+wer = load("wer")
 bertscore = load("bertscore")
-references = ["long-range dependencies. The Transformers model is based on the encoder-decoder architecture, where the encoder encodes the input sequence into a fixed-length vector, and the decoder generates the output sequence based on the encoded vector. The attention mechanism allows the decoder to focus on specific parts of the input sequence when generating the output sequence. The Transformers model has been widely used in natural language processing (NLP) tasks, such as machine translation, summarization, and question answering. It has also been applied to other domains, such as computer vision and speech recognition. The Trans"]
+outputs = OrderedDict()
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
 
-predictions = ["the dependencies between the elements of a sequence. The Transformers model is based on the self-attention mechanism, which allows the model to attend to different parts of the sequence in parallel. The Transformers model has been shown to outperform recurrent neural networks (RNNs) on a variety of tasks, including machine translation and summarization. The Transformers model is a deep learning model that is used for natural language processing tasks. The model is based on the self-attention mechanism, which allows the model to attend to different parts of the input sequence in parallel. The Transformers model has been shown"]
-# predictions = ["longrange dependencies in seqs. The Transformer model is based on the selfattention mechanism, which is a generalization of the attention mechanism. The selfattention mechanism is a mechanism that allows a model to focus on specific parts of the input when making a prediction. The Transformer model is a deep learning model that is used for seq tasks. It is based on the selfattention mechanism, which is a generalization of the attention mechanism. The selfattention mechanism is a mechanism that allows a model to focus on specific parts of the input when making a prediction. The Transformer model is a deep learning model that is used"]
-# predictions = ["the long-term dependencies. The Transformer model is based on the self-attention mechanism. It is a multi-head attention mechanism that allows the model to jointly attend to information from different representation subspaces at different positions. The Transformer model is a stack of encoder and decoder layers. The encoder layer is a stack of N identical layers. Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a position-wise fully connected feed-forward network. The decoder is also a stack of N identical layers, but with an"]
-# predictions = ["I like your dog"]
-# references = ["I hate your dog"]
-results = bertscore.compute(predictions=predictions, references=references, lang="en")
-print(results)
+f_a = open('/home/ubuntu/shrink_kv/hf_Llama-2-13b-hf.json')
+f_b = open('/home/ubuntu/shrink_kv/our_full_Llama-2-13b-hf.json')
 
-# rouge = load('rouge')
-# results = rouge.compute(predictions=predictions, references=references)
-# print(results)
+ref_data = json.load(f_a)
+test_data = json.load(f_b)
+
+assert len(ref_data) == len(test_data)
+
+similarity = []
+wer_scores = []
+bert_precisions = []
+bert_recalls = []
+bert_f1 = []
+n = 0
+idx = []
+prompts = []
+
+for ref, test in zip(ref_data.items(), test_data.items()):
+    assert len(ref[0]) == len(test[0])
+    s = similar(ref[1], test[1])
+    similarity.append(s)
+    # wer_score = wer.compute(predictions=[test[1]], references=[ref[1]])
+    # wer_scores.append(wer_score)
+
+    bert_score = bertscore.compute(predictions=[ref[1]], references=[test[1]], lang="en")
+    bert_precisions.append(bert_score["precision"][0])
+    bert_recalls.append(bert_score["recall"][0])
+    bert_f1.append(bert_score["f1"][0])
+    wer_score = wer.compute(predictions=[test[1]], references=[ref[1]])
+    wer_scores.append(wer_score)
+    if s < 1:
+        print(f"========={s}, {bert_score['f1'][0]}===========")
+        print(ref[0])
+        print("-------------------")
+        print(ref[1])
+        print("..............")
+        print(test[1])
+        n+=1
+
+print("similar rate: ",1 - n / len(similarity))
+print("similarity: {0:.6f}".format(np.mean(similarity)))
+# print(wer_scores)
+print("wer_score: {0:.6f}".format(np.mean(wer_scores)))
+print(f"bert_precision: {np.mean(bert_precisions):.6f}, bert_recall: {np.mean(bert_recalls):.6f}, bert_f1: {np.mean(bert_f1):.6f}")
