@@ -36,6 +36,7 @@ def endless_generate(
         ),
         streamer=streamer,
     )
+    print(generated_tokens)
     # Decode the final generated text
     return tokenizer.decode(generated_tokens[0], skip_special_tokens=True)
 
@@ -49,7 +50,7 @@ def main():
     )
 
     # Model args
-    parser.add_argument("--model_name_or_path", type=str, default="meta-llama/Llama-2-7b-hf")
+    parser.add_argument("--model_name_or_path", type=str, default="NousResearch/Llama-2-7b-hf")
     parser.add_argument("--revision", type=str, default="main")
     parser.add_argument("--trust_remote_code", action="store_true")
 
@@ -64,7 +65,7 @@ def main():
     parser.add_argument("--log_file", type=str, default=None)
 
     # Window size for windowed and attention_sinks
-    parser.add_argument("--window_size", type=int, default=512)
+    parser.add_argument("--window_size", type=int, default=256)
 
     # Attention Sinks-only settings
     # Attention Sink window size is calculated with args.window_size - args.attention_sink_size

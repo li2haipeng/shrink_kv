@@ -11,7 +11,8 @@ python benchmark/perplexity.py --experiment transformers
 python benchmark/perplexity.py --experiment windowed
 """
 
-
+import sys
+sys.path.append("..")
 import argparse
 import itertools
 import time
@@ -37,10 +38,11 @@ def compute_perplexity(
     num_samples: int = 1,
     num_tokens: Optional[int] = None,
     overwrite: bool = False,
+    window: int = 1020,
 ) -> None:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_dir / f"{experiment}.csv"
+    output_file = output_dir / f"{experiment}_{window}.csv"
 
     if output_file.exists() and not overwrite:
         raise ValueError(
@@ -55,7 +57,7 @@ def compute_perplexity(
         encodings = tokenizer(text[data_column], return_tensors="pt")
 
         seq_len = encodings.input_ids.size(1)
-        print(f"sequence length: {seq_len}")
+        # print(f"sequence length: {seq_len}")
         pbar = tqdm(range(0, seq_len - 1))
 
         for idx in pbar:
@@ -65,6 +67,7 @@ def compute_perplexity(
                 outputs = model(input_ids, past_key_values=past_key_values, use_cache=True)
                 logits = outputs.logits.view(-1, model.config.vocab_size)
                 past_key_values = outputs.past_key_values
+                # print(past_key_values[0][0].size())
                 label = encodings.input_ids[:, idx + 1 : idx + 2].to(logits.device).view(-1)
                 neg_log_likelihood = loss_fn(logits, label)
                 perplexity = neg_log_likelihood.exp()
@@ -98,7 +101,7 @@ def main():
     )
 
     # Model args
-    parser.add_argument("--model_name_or_path", type=str, default="meta-llama/Llama-2-7b-hf")
+    parser.add_argument("--model_name_or_path", type=str, default="NousResearch/Llama-2-7b-hf")
     parser.add_argument("--revision", type=str, default="main")
     parser.add_argument("--trust_remote_code", action="store_true")
 
@@ -163,6 +166,7 @@ def main():
         num_samples=1,  # <- No support for more than one instance now
         num_tokens=args.num_tokens,
         overwrite=args.overwrite,
+        window=args.window_size,
     )
 
 

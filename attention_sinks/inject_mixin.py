@@ -5,6 +5,7 @@ from transformers import PreTrainedModel
 from transformers.utils import logging
 
 from attention_sinks.attention_sink_kv_cache import AttentionSinkKVCache
+from attention_sinks.group_token_pruning import UpdateKVCache
 from attention_sinks.generation.utils import _update_model_kwargs_for_generation
 
 logger = logging.get_logger(__name__)
@@ -82,22 +83,22 @@ class InjectAttentionSinksMixin:
         model_type = model.config.model_type
 
         from attention_sinks.models import (
-            falcon_pos_shift_attention_forward,
-            gpt_neox_pos_shift_attention_forward,
-            gptj_pos_shift_attention_forward,
+            # falcon_pos_shift_attention_forward,
+            # gpt_neox_pos_shift_attention_forward,
+            # gptj_pos_shift_attention_forward,
             llama_pos_shift_attention_forward,
-            mistral_pos_shift_attention_forward,
-            qwen_pos_shift_attention_forward,
+            # mistral_pos_shift_attention_forward,
+            # qwen_pos_shift_attention_forward,
         )
 
         ATTENTION_FORWARD_MAPPING = {
             "llama": llama_pos_shift_attention_forward,
-            "falcon": falcon_pos_shift_attention_forward,
-            "mpt": None,
-            "gpt_neox": gpt_neox_pos_shift_attention_forward,
-            "gptj": gptj_pos_shift_attention_forward,
-            "mistral": mistral_pos_shift_attention_forward,
-            "qwen": qwen_pos_shift_attention_forward,
+            # "falcon": falcon_pos_shift_attention_forward,
+            # "mpt": None,
+            # "gpt_neox": gpt_neox_pos_shift_attention_forward,
+            # "gptj": gptj_pos_shift_attention_forward,
+            # "mistral": mistral_pos_shift_attention_forward,
+            # "qwen": qwen_pos_shift_attention_forward,
         }
 
         # Not all models require updated attention forwards
@@ -113,18 +114,33 @@ class InjectAttentionSinksMixin:
     def _inject_attention_sink_kv_cache(cls, model, **attention_sink_kwargs) -> int:
         model_type = model.config.model_type
         attention_sink_kwargs["k_seq_dim"], attention_sink_kwargs["v_seq_dim"] = KV_DIM_MAPPING[model_type]
-
+        mode = attention_sink_kwargs.pop("attention_sink_mode")
+        # for k,v in attention_sink_kwargs.items():
+        #     print(k,v)
+        # exit()
         def overwrite_forward(module):
             # Create the new cache
             module.attention_sink_kv_cache = AttentionSinkKVCache(**attention_sink_kwargs)
-
+            
+            # module.kv_cache_selection = 
             # Keep track of the old forward method, we need it in the wrapped one
             old_forward = module.forward
 
             # Wrap the forward by overriding the past_key_values using the cache
             def wrapped_forward(self, *args, **kwargs):
                 outputs = old_forward(*args, **kwargs)
-                outputs.past_key_values = self.attention_sink_kv_cache(outputs.past_key_values)
+                
+                if mode == "2":
+                    print("our mode")
+                    module.update_kv_cache = UpdateKVCache(outputs.attentions)
+                    outputs.past_key_values = self.update_kv_cache(outputs.past_key_values)
+                elif mode == "1":
+                    print("attention_sink mode")
+                    outputs.past_key_values = self.attention_sink_kv_cache(outputs.past_key_values)
+                else:
+                    print("transformers mode")
+                    pass
+                # print(outputs.past_key_values[0][0].size())
                 return outputs
 
             module.forward = types.MethodType(wrapped_forward, module)

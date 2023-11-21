@@ -1,0 +1,15 @@
+from evaluate import load
+bertscore = load("bertscore")
+references = ["long-range dependencies. The Transformers model is based on the encoder-decoder architecture, where the encoder encodes the input sequence into a fixed-length vector, and the decoder generates the output sequence based on the encoded vector. The attention mechanism allows the decoder to focus on specific parts of the input sequence when generating the output sequence. The Transformers model has been widely used in natural language processing (NLP) tasks, such as machine translation, summarization, and question answering. It has also been applied to other domains, such as computer vision and speech recognition. The Trans"]
+
+predictions = ["the dependencies between the elements of a sequence. The Transformers model is based on the self-attention mechanism, which allows the model to attend to different parts of the sequence in parallel. The Transformers model has been shown to outperform recurrent neural networks (RNNs) on a variety of tasks, including machine translation and summarization. The Transformers model is a deep learning model that is used for natural language processing tasks. The model is based on the self-attention mechanism, which allows the model to attend to different parts of the input sequence in parallel. The Transformers model has been shown"]
+# predictions = ["longrange dependencies in seqs. The Transformer model is based on the selfattention mechanism, which is a generalization of the attention mechanism. The selfattention mechanism is a mechanism that allows a model to focus on specific parts of the input when making a prediction. The Transformer model is a deep learning model that is used for seq tasks. It is based on the selfattention mechanism, which is a generalization of the attention mechanism. The selfattention mechanism is a mechanism that allows a model to focus on specific parts of the input when making a prediction. The Transformer model is a deep learning model that is used"]
+# predictions = ["the long-term dependencies. The Transformer model is based on the self-attention mechanism. It is a multi-head attention mechanism that allows the model to jointly attend to information from different representation subspaces at different positions. The Transformer model is a stack of encoder and decoder layers. The encoder layer is a stack of N identical layers. Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a position-wise fully connected feed-forward network. The decoder is also a stack of N identical layers, but with an"]
+# predictions = ["I like your dog"]
+# references = ["I hate your dog"]
+results = bertscore.compute(predictions=predictions, references=references, lang="en")
+print(results)
+
+# rouge = load('rouge')
+# results = rouge.compute(predictions=predictions, references=references)
+# print(results)

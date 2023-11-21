@@ -1,0 +1,6 @@
+[2023-11-16 20:20:02,062] [INFO] [real_accelerator.py:133:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+torch.Size([1, 75])
+Param: 6738.42
+start...
+run: 0
+72
