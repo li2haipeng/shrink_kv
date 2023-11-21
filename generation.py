@@ -31,7 +31,6 @@ def nvidia_smi():
         print()
 
 
-# batch_size = int(sys.argv[1])
 batch_size = 1
 # model_name = "NousResearch/Llama-2-13b-hf"
 model_name = "/home/ubuntu/hummingbird/data/llama2-70b-hf"
@@ -39,13 +38,6 @@ m = model_name.split("/")[-1]
 print(f"loading {m}...")
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-instructions = ['Tell me about the president of Mexico in 2019.'] 
-instructions = ["".join(instructions)] * batch_size
-# print(instructions)
-
-inputs = tokenizer(instructions, return_tensors="pt")["input_ids"]
-print(inputs.size())
 
 kwargs = {
     "attention_sink_size": 4,
@@ -59,25 +51,25 @@ model = LlamaForCausalLM.from_pretrained(
    device_map="auto",
    **kwargs,
 )
-position_ids = torch.arange(len(inputs[0]), dtype=torch.float16, device=model.device)
-outputs = model.model(
-            input_ids=inputs.to(model.device),
-            attention_mask=None,
-            position_ids=position_ids,
-            past_key_values=None,
-            inputs_embeds=None,
-            use_cache=True,
-            output_attentions=True,
-            output_hidden_states=False,
-            return_dict=True,
-        )
-attn_w = torch.sum(outputs.attentions[-1].squeeze(), dim=1)
-attn_w = torch.sum(attn_w, dim=0)
-df = pd.DataFrame(attn_w.detach().cpu().numpy())
-prompt_w_path = "/home/ubuntu/shrink_kv/results/seq_{}_layer.csv".format(inputs.size(1))
-df.to_csv(prompt_w_path)
-selected = prompt_token_selection(prompt_w_path, rate=0.5)
-inputs = inputs[:,selected]
+# position_ids = torch.arange(len(inputs[0]), dtype=torch.float16, device=model.device)
+# outputs = model.model(
+#             input_ids=inputs.to(model.device),
+#             attention_mask=None,
+#             position_ids=position_ids,
+#             past_key_values=None,
+#             inputs_embeds=None,
+#             use_cache=True,
+#             output_attentions=True,
+#             output_hidden_states=False,
+#             return_dict=True,
+#         )
+# attn_w = torch.sum(outputs.attentions[-1].squeeze(), dim=1)
+# attn_w = torch.sum(attn_w, dim=0)
+# df = pd.DataFrame(attn_w.detach().cpu().numpy())
+# prompt_w_path = "/home/ubuntu/shrink_kv/results/seq_{}_layer.csv".format(inputs.size(1))
+# df.to_csv(prompt_w_path)
+# selected = prompt_token_selection(prompt_w_path, rate=0.5)
+# inputs = inputs[:,selected]
 
 
 model.eval()
@@ -99,30 +91,38 @@ if tokenizer.pad_token is None:
     tokenizer.add_special_tokens({'pad_token': DEFAULT_PAD_TOKEN})
 model.resize_token_embeddings(len(tokenizer))
 
+
+dataset = load_dataset('lambada', split='validation[:100]')
+iterations = 1
 max_tokens = 128
 print("start...")
 
-t0 = time.time()
+results = OrderedDict()
+for inp in dataset:
+    inp_text = inp['text']
+    inputs = tokenizer(inp_text, return_tensors="pt")["input_ids"]
+    print(f"Prompt: {inp_text}")
 
-outputs = model.generate(
-        input_ids=inputs.to(model.device),
-        max_new_tokens=max_tokens, 
-        pad_token_id=tokenizer.eos_token_id,
-    )
+    t0 = time.time()
+    # print(f"============{i} run==============")
 
-# nvidia_smi()
-generated_tokens = outputs
-t1 = time.time()
-print(torch.cuda.memory_summary())
+    outputs = model.generate(
+            input_ids=inputs.to(model.device),
+            max_new_tokens=max_tokens, 
+            pad_token_id=tokenizer.eos_token_id,
+        )
 
-tokens_gen_text = len(generated_tokens[0]) - inputs.shape[1]
-# response = tokenizer.decode(generated_tokens[0, inputs.shape[1]:])
-# print(f"Response: {response}")
+    # nvidia_smi()
+    generated_tokens = outputs
+    t1 = time.time()
+    # print(torch.cuda.memory_summary())
 
-throughput = (tokens_gen_text * batch_size) / ((t1 - t0))
+    # tokens_gen_text = len(generated_tokens[0]) - inputs.shape[1]
+    response = tokenizer.decode(generated_tokens[0, inputs.shape[1]:])
+    print(f"Response: {response}")
+    results[inp_text] = response
+    print(f"======={len(results), time.time()-t0}====================")
 
-# view results
-print(f"""Tokens generated: {tokens_gen_text}
-Time: {t1 - t0:.1f} seconds
-Tokens per second: {throughput:.1f}
-Latency: {1000 / throughput:.1f} ms""")
+m = model_name.split("/")[-1]
+with open(f"our_full_{max_tokens}_{m}.json", 'w') as f:
+    f.write(json.dumps(results))
