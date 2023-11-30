@@ -31,16 +31,16 @@ def nvidia_smi():
         print()
 
 
-# batch_size = int(sys.argv[1])
-batch_size = 1
-# model_name = "NousResearch/Llama-2-13b-hf"
-model_name = "/home/ubuntu/hummingbird/data/llama2-70b-hf"
+batch_size = int(sys.argv[1])
+
+model_name = "NousResearch/Llama-2-7b-hf"
+# model_name = "/home/ubuntu/hummingbird/data/llama2-70b-hf"
 m = model_name.split("/")[-1]
 print(f"loading {m}...")
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-instructions = ['Tell me about the president of Mexico in 2019.'] 
+instructions = ['Tell me about the president of Mexico in 2019.'] * 14
 instructions = ["".join(instructions)] * batch_size
 # print(instructions)
 
@@ -50,7 +50,7 @@ print(inputs.size())
 kwargs = {
     "attention_sink_size": 4,
     "attention_sink_window_size": 252,  # default: 1020
-    "attention_sink_mode": "2"
+    "attention_sink_mode": "2" # 0: HF; 1: attn_sink; 2: Our
 }
 model = LlamaForCausalLM.from_pretrained(
    model_name, 
@@ -59,7 +59,7 @@ model = LlamaForCausalLM.from_pretrained(
    device_map="auto",
    **kwargs,
 )
-position_ids = torch.arange(len(inputs[0]), dtype=torch.float16, device=model.device)
+position_ids = torch.arange(len(inputs[0]), device=model.device)
 outputs = model.model(
             input_ids=inputs.to(model.device),
             attention_mask=None,
@@ -76,7 +76,7 @@ attn_w = torch.sum(attn_w, dim=0)
 df = pd.DataFrame(attn_w.detach().cpu().numpy())
 prompt_w_path = "/home/ubuntu/shrink_kv/results/seq_{}_layer.csv".format(inputs.size(1))
 df.to_csv(prompt_w_path)
-selected = prompt_token_selection(prompt_w_path, rate=0.5)
+selected = prompt_token_selection(prompt_w_path, rate=0.8)
 inputs = inputs[:,selected]
 
 
