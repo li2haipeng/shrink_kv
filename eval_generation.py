@@ -38,11 +38,11 @@ m = model_name.split("/")[-1]
 print(f"loading {m}...")
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-
+mode = "1"
 kwargs = {
     "attention_sink_size": 4,
     "attention_sink_window_size": 252,  # default: 1020
-    "attention_sink_mode": "1" # -1: HF; 0: original attn sink; 1: sink recent; 2: our
+    "attention_sink_mode": mode # -1: HF; 0: original attn sink; 1: sink recent; 2: our
 }
 model = pruned_LlamaForCausalLM.from_pretrained(
    model_name, 
@@ -124,5 +124,5 @@ for inp in dataset:
     print(f"======={len(results), time.time()-t0}====================")
 
 m = model_name.split("/")[-1]
-with open(f"our_full_{max_tokens}_{m}.json", 'w') as f:
+with open(f"model_{mode}_{max_tokens}_{m}.json", 'w') as f:
     f.write(json.dumps(results))
