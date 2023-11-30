@@ -1,3 +1,4 @@
+from typing import Any
 import numpy as np
 import pandas as pd
 from jenkspy import JenksNaturalBreaks
@@ -17,6 +18,26 @@ def duplicate(testList, n):
     return [ele for ele in testList for _ in range(n)]
 
 
+
+
+@dataclass
+class SinkRencent:
+    attention_sink_size: int = 4
+    attention_sink_window_size: int = 1020
+    k_seq_dim: int = 2
+    v_seq_dim: int = 2
+    # prompt_len: int = 0
+
+    def __call__(self, past_key_values) -> Any:
+ 
+        pruned_next_cache = []
+        for k, v in past_key_values:
+            pruned_k = torch.cat([k[:,:,:self.attention_sink_size,:], k[:,:,self.attention_sink_size + 1:,:]], dim=2)
+            pruned_v = torch.cat([v[:,:,:self.attention_sink_size,:], v[:,:,self.attention_sink_size + 1:,:]], dim=2)
+            pruned_next_cache.append([pruned_k, pruned_v])
+        # pruned_seq_len = pruned_next_cache[0][0].size(self.k_seq_dim)
+
+        return pruned_next_cache
 
 
 @dataclass

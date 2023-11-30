@@ -12,7 +12,7 @@ from attention_sinks.group_token_pruning import prompt_token_selection
 from collections import OrderedDict
 import json
 # from token_pruning_llama import LlamaForCausalLM
-from attention_sinks import LlamaForCausalLM
+from attention_sinks import LlamaForCausalLM as pruned_LlamaForCausalLM
 from transformers import LlamaTokenizer
 os.environ["CUDA_VISIBLE_DEVICES"] = str(0)
 DEFAULT_PAD_TOKEN = "[PAD]"
@@ -32,8 +32,8 @@ def nvidia_smi():
 
 
 batch_size = 1
-# model_name = "NousResearch/Llama-2-13b-hf"
-model_name = "/home/ubuntu/hummingbird/data/llama2-70b-hf"
+model_name = "NousResearch/Llama-2-13b-hf"
+# model_name = "/home/ubuntu/hummingbird/data/llama2-70b-hf"
 m = model_name.split("/")[-1]
 print(f"loading {m}...")
 
@@ -42,9 +42,9 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 kwargs = {
     "attention_sink_size": 4,
     "attention_sink_window_size": 252,  # default: 1020
-    "attention_sink_mode": "2"
+    "attention_sink_mode": "1" # -1: HF; 0: original attn sink; 1: sink recent; 2: our
 }
-model = LlamaForCausalLM.from_pretrained(
+model = pruned_LlamaForCausalLM.from_pretrained(
    model_name, 
    revision="main",
    torch_dtype=torch.float16,
@@ -101,7 +101,7 @@ results = OrderedDict()
 for inp in dataset:
     inp_text = inp['text']
     inputs = tokenizer(inp_text, return_tensors="pt")["input_ids"]
-    print(f"Prompt: {inp_text}")
+    print(f"Prompt: {inp_text}\n")
 
     t0 = time.time()
     # print(f"============{i} run==============")
@@ -119,7 +119,7 @@ for inp in dataset:
 
     # tokens_gen_text = len(generated_tokens[0]) - inputs.shape[1]
     response = tokenizer.decode(generated_tokens[0, inputs.shape[1]:])
-    print(f"Response: {response}")
+    print(f"Response: {response}\n")
     results[inp_text] = response
     print(f"======={len(results), time.time()-t0}====================")
 

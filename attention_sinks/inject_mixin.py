@@ -5,7 +5,7 @@ from transformers import PreTrainedModel
 from transformers.utils import logging
 
 from attention_sinks.attention_sink_kv_cache import AttentionSinkKVCache
-from attention_sinks.group_token_pruning import UpdateKVCache
+from attention_sinks.group_token_pruning import UpdateKVCache, SinkRencent
 from attention_sinks.generation.utils import _update_model_kwargs_for_generation
 
 logger = logging.get_logger(__name__)
@@ -120,9 +120,6 @@ class InjectAttentionSinksMixin:
         # exit()
         def overwrite_forward(module):
             # Create the new cache
-            module.attention_sink_kv_cache = AttentionSinkKVCache(**attention_sink_kwargs)
-            
-            # module.kv_cache_selection = 
             # Keep track of the old forward method, we need it in the wrapped one
             old_forward = module.forward
 
@@ -133,13 +130,16 @@ class InjectAttentionSinksMixin:
                 if mode == "2":
                     # print("our mode")
                     module.update_kv_cache = UpdateKVCache(outputs.attentions)
-                    outputs.past_key_values = self.update_kv_cache(outputs.past_key_values)
                 elif mode == "1":
-                    # print("attention_sink mode")
-                    outputs.past_key_values = self.attention_sink_kv_cache(outputs.past_key_values)
+                    # print("sink recent mode")
+                    module.update_kv_cache = SinkRencent(**attention_sink_kwargs)
+                elif mode == "0":
+                    # print("original attn sink")
+                    module.update_kv_cache = AttentionSinkKVCache(**attention_sink_kwargs)
                 else:
                     # print("transformers mode")
                     pass
+                outputs.past_key_values = self.update_kv_cache(outputs.past_key_values)
                 # print(outputs.past_key_values[0][0].size())
                 return outputs
 
