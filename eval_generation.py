@@ -35,7 +35,7 @@ def nvidia_smi():
 batch_size = 1
 model_name = "NousResearch/Llama-2-13b-hf"
 # model_name = "/home/ubuntu/hummingbird/data/llama2-70b-hf"
-r = 0.5
+r = 0.8
 mode = str(sys.argv[1])
 
 
@@ -58,11 +58,13 @@ model = pruned_LlamaForCausalLM.from_pretrained(
 )
 
 def prompt_pruning(inputs, mode, rate):
+    prompt_len = inputs.size(1)
+    budgets = int(prompt_len * r)
+
     if mode == "1":
-        prompt_len = inputs.size(1)
-        recent_idx = int(prompt_len * r)
-        inputs = inputs[:, recent_idx:]
-        return inputs
+        print(f"len: {inputs.size(1)}, pruned len: {inputs[:, prompt_len - budgets:].size(1)}")
+        return inputs[:, prompt_len - budgets:]
+    
     elif mode == "2":
         position_ids = torch.arange(len(inputs[0]), dtype=torch.float16, device=model.device)
         outputs = model.model(
@@ -78,10 +80,10 @@ def prompt_pruning(inputs, mode, rate):
                 )
         attn_w = torch.sum(outputs.attentions[-1].squeeze(), dim=1)
         attn_w = torch.sum(attn_w, dim=0)
-        print(attn_w.size())
-        exit()
-        selected = np.argsort(attn_w)
-        inputs = inputs[:,selected]
+        selected = np.argsort(attn_w.cpu().detach().numpy())[::-1][:budgets]
+        selected = np.sort(selected)
+        print(f"len: {inputs.size(1)}, pruned len: {inputs[:,selected].size(1)}")
+        return inputs[:,selected]
     elif mode == "3":
         position_ids = torch.arange(len(inputs[0]), dtype=torch.float16, device=model.device)
         outputs = model.model(
@@ -134,14 +136,10 @@ results = OrderedDict()
 for inp in dataset:
     inp_text = inp['text']
     inputs = tokenizer(inp_text, return_tensors="pt")["input_ids"]
-    # if mode == "1":
-    #     prompt_len = inputs.size(1)
-    #     recent_idx = int(prompt_len * r)
-    #     inputs = inputs[:, recent_idx:]
-    # elif mode == "2":
+
     inputs = prompt_pruning(inputs, mode, r)
-    # exit()
-    print(f"Prompt: {inp_text}\n")
+
+    print(f"Prompt (ori): {inp_text}\n")
 
     t0 = time.time()
     # print(f"============{i} run==============")
