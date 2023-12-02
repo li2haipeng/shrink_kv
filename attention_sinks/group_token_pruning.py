@@ -48,11 +48,10 @@ class UpdateKVCache:
 
     def __post_init__(self):
         self.attn_w = torch.sum(self.all_self_attns[-1], dim=(0,1,2), keepdim=True)
-        self.min_idx = np.argmin(self.attn_w.squeeze().cpu().detach().numpy())
+        self.min_idx = np.argmin(self.attn_w.squeeze().cpu().detach().numpy()) 
+        self.min_idx = self.min_idx if self.min_idx >= 5 else 4
 
     def __call__(self, past_key_values):
-        # print("!!!",self.min_idx)
-        # exit()
         pruned_next_cache = []
         for k, v in past_key_values:
             pruned_k = torch.cat([k[:,:,:self.min_idx,:], k[:,:,self.min_idx+1:,:]], dim=2)

@@ -10,8 +10,8 @@ outputs = OrderedDict()
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
-f_a = open('/home/ubuntu/shrink_kv/hf_Llama-2-13b-hf.json')
-f_b = open('/home/ubuntu/shrink_kv/our_full_Llama-2-13b-hf.json')
+f_a = open('/home/ubuntu/shrink_kv/hf_128_llama2-70b-hf.json')
+f_b = open('/home/ubuntu/shrink_kv/mode_2_128_r_0.5_llama2-70b-hf.json')
 
 ref_data = json.load(f_a)
 test_data = json.load(f_b)
@@ -41,12 +41,12 @@ for ref, test in zip(ref_data.items(), test_data.items()):
     wer_score = wer.compute(predictions=[test[1]], references=[ref[1]])
     wer_scores.append(wer_score)
     if s < 1:
-        print(f"========={s}, {bert_score['f1'][0]}===========")
-        print(ref[0])
-        print("-------------------")
-        print(ref[1])
-        print("..............")
-        print(test[1])
+    #     print(f"========={s}, {bert_score['f1'][0]}===========")
+    #     print(ref[0])
+    #     print("-------------------")
+    #     print(ref[1])
+    #     print("..............")
+    #     print(test[1])
         n+=1
 
 print("similar rate: ",1 - n / len(similarity))

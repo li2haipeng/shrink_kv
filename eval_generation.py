@@ -4,6 +4,7 @@ import time
 import os
 import subprocess
 import pandas as pd
+import numpy as np
 import sys
 from datasets import load_dataset
 sys.path.append("..")
@@ -34,15 +35,19 @@ def nvidia_smi():
 batch_size = 1
 model_name = "NousResearch/Llama-2-13b-hf"
 # model_name = "/home/ubuntu/hummingbird/data/llama2-70b-hf"
+r = 0.5
+mode = str(sys.argv[1])
+
+
 m = model_name.split("/")[-1]
 print(f"loading {m}...")
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-mode = "1"
+
 kwargs = {
     "attention_sink_size": 4,
     "attention_sink_window_size": 252,  # default: 1020
-    "attention_sink_mode": mode # -1: HF; 0: original attn sink; 1: sink recent; 2: our
+    "attention_sink_mode": mode # -1: HF; 0: original attn sink; 1: sink recent; 2: ranking based; 3: our
 }
 model = pruned_LlamaForCausalLM.from_pretrained(
    model_name, 
@@ -51,26 +56,52 @@ model = pruned_LlamaForCausalLM.from_pretrained(
    device_map="auto",
    **kwargs,
 )
-# position_ids = torch.arange(len(inputs[0]), dtype=torch.float16, device=model.device)
-# outputs = model.model(
-#             input_ids=inputs.to(model.device),
-#             attention_mask=None,
-#             position_ids=position_ids,
-#             past_key_values=None,
-#             inputs_embeds=None,
-#             use_cache=True,
-#             output_attentions=True,
-#             output_hidden_states=False,
-#             return_dict=True,
-#         )
-# attn_w = torch.sum(outputs.attentions[-1].squeeze(), dim=1)
-# attn_w = torch.sum(attn_w, dim=0)
-# df = pd.DataFrame(attn_w.detach().cpu().numpy())
-# prompt_w_path = "/home/ubuntu/shrink_kv/results/seq_{}_layer.csv".format(inputs.size(1))
-# df.to_csv(prompt_w_path)
-# selected = prompt_token_selection(prompt_w_path, rate=0.5)
-# inputs = inputs[:,selected]
 
+def prompt_pruning(inputs, mode, rate):
+    if mode == "1":
+        prompt_len = inputs.size(1)
+        recent_idx = int(prompt_len * r)
+        inputs = inputs[:, recent_idx:]
+        return inputs
+    elif mode == "2":
+        position_ids = torch.arange(len(inputs[0]), dtype=torch.float16, device=model.device)
+        outputs = model.model(
+                    input_ids=inputs.to(model.device),
+                    attention_mask=None,
+                    position_ids=position_ids,
+                    past_key_values=None,
+                    inputs_embeds=None,
+                    use_cache=True,
+                    output_attentions=True,
+                    output_hidden_states=False,
+                    return_dict=True,
+                )
+        attn_w = torch.sum(outputs.attentions[-1].squeeze(), dim=1)
+        attn_w = torch.sum(attn_w, dim=0)
+        print(attn_w.size())
+        exit()
+        selected = np.argsort(attn_w)
+        inputs = inputs[:,selected]
+    elif mode == "3":
+        position_ids = torch.arange(len(inputs[0]), dtype=torch.float16, device=model.device)
+        outputs = model.model(
+                    input_ids=inputs.to(model.device),
+                    attention_mask=None,
+                    position_ids=position_ids,
+                    past_key_values=None,
+                    inputs_embeds=None,
+                    use_cache=True,
+                    output_attentions=True,
+                    output_hidden_states=False,
+                    return_dict=True,
+                )
+        attn_w = torch.sum(outputs.attentions[-1].squeeze(), dim=1)
+        attn_w = torch.sum(attn_w, dim=0)
+        df = pd.DataFrame(attn_w.detach().cpu().numpy())
+        prompt_w_path = "/home/ubuntu/shrink_kv/results/seq_{}_layer.csv".format(inputs.size(1))
+        df.to_csv(prompt_w_path)
+        selected = prompt_token_selection(prompt_w_path, rate=rate)
+        inputs = inputs[:,selected]
 
 model.eval()
 model.config.output_attentions = True
@@ -97,10 +128,19 @@ iterations = 1
 max_tokens = 128
 print("start...")
 
+
+
 results = OrderedDict()
 for inp in dataset:
     inp_text = inp['text']
     inputs = tokenizer(inp_text, return_tensors="pt")["input_ids"]
+    # if mode == "1":
+    #     prompt_len = inputs.size(1)
+    #     recent_idx = int(prompt_len * r)
+    #     inputs = inputs[:, recent_idx:]
+    # elif mode == "2":
+    inputs = prompt_pruning(inputs, mode, r)
+    # exit()
     print(f"Prompt: {inp_text}\n")
 
     t0 = time.time()
@@ -124,5 +164,5 @@ for inp in dataset:
     print(f"======={len(results), time.time()-t0}====================")
 
 m = model_name.split("/")[-1]
-with open(f"model_{mode}_{max_tokens}_{m}.json", 'w') as f:
+with open(f"mode_{mode}_{max_tokens}_r_{r}_{m}.json", 'w') as f:
     f.write(json.dumps(results))
