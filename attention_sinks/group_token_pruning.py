@@ -135,7 +135,7 @@ def prompt_token_selection(attn_w, rate):
 
     selected, labels = select_tokens_with_rules(labels, rule, budget)
 
-    recent = [i for i in range(len(data))][-int(len(data) * 0.1):]
+    recent = [i for i in range(len(attn_w))][-int(len(attn_w) * 0.1):]
     labels[recent[0]:] = [-1] * len(recent)
     selected.extend(recent)
 
