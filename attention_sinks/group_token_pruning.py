@@ -5,6 +5,8 @@ from jenkspy import JenksNaturalBreaks
 import time
 from dataclasses import dataclass
 import torch
+from evaluate import load as eval_load
+
 
 def selection_rules(candidates):
     num_labels = len(candidates)
@@ -14,10 +16,65 @@ def selection_rules(candidates):
     return top, middle, bottom
 
 
+def select_tokens_with_rules(labels, rule, budget)->list:
+    sorted_labels = np.argsort(labels)[::-1]
+    selected = list()
+    if len(rule) == 3:
+        top, middle, bottom = rule
+        for idx in sorted_labels:
+            l = labels[idx]
+            if idx == 0 or idx == len(labels) - 1:
+                selected.append(idx)
+                labels[idx] = -1
+                continue
+            if l in top:
+                selected.append(idx)
+                labels[idx] = -1
+            elif l in middle:
+                if abs(labels[idx - 1] - l) <= 1 and abs(labels[idx + 1] - l) <= 1:
+                    selected.extend([idx - 1, idx, idx + 1])
+                    labels[idx - 1] = -1
+                    labels[idx] = -1
+                    labels[idx + 1] = -1
+
+            elif l in bottom:
+                if labels[idx - 1] == l and labels[idx + 1] == l:
+                    selected.extend([idx - 1, idx, idx + 1])
+                    labels[idx - 1] = -1
+                    labels[idx] = -1
+                    labels[idx + 1] = -1
+            elif l == -1:
+                continue
+
+            if len(set(selected)) >= budget:
+                break
+    else:
+        for idx in sorted_labels:
+            l = labels[idx]
+            if idx == 0 or idx == len(labels) - 1:
+                selected.append(idx)
+                labels[idx] = -1
+                continue
+            elif labels[idx - 1] != -1 and labels [idx + 1] != -1:
+                selected.extend([idx - 1, idx, idx + 1])
+                labels[idx - 1] = -1
+                labels[idx] = -1
+                labels[idx + 1] = -1
+            elif l == -1:
+                continue
+
+            if len(set(selected)) >= budget:
+                break
+    return [selected, labels]
+
+
 def duplicate(testList, n):
     return [ele for ele in testList for _ in range(n)]
 
 
+def pruned_prompt_eval(prompt, pruned_promt):
+    bertscore = eval_load("bertscore")
+    bert_score = bertscore.compute(predictions=prompt, references=pruned_promt, lang="en")
 
 
 @dataclass
@@ -61,42 +118,32 @@ class UpdateKVCache:
         return pruned_next_cache
 
 
-def prompt_token_selection(w_path, rate):
-    d = pd.read_csv(w_path, index_col=0)
-    data = d.values.transpose()[0]
-    groups = int(len(data)/5)
+def prompt_token_selection(attn_w, rate):
+    if type(attn_w) == str:
+        d = pd.read_csv(w_path, index_col=0)
+        attn_w = d.values.transpose()[0]
+
+    groups = int(len(attn_w)/5)
     jnb = JenksNaturalBreaks(groups)
-    jnb.fit(data)
-    labels = jnb.labels_
+    jnb.fit(attn_w)
+    labels = jnb.labels_.tolist()
     print(labels)
-    budget = int(len(data) * rate)
+    budget = int(len(attn_w) * rate)
     candidates = [i for i in range(groups)]
     top, middle, bottom = selection_rules(candidates)
-    # print(f"selection rules: top: {top}, middle: {middle}, bottom: {bottom}")
-    selected = list()
-    sorted_labels = np.argsort(labels)[::-1]
-    for idx in sorted_labels:
-        l = labels[idx]
+    rule = [top, middle, bottom]
 
-        if idx == 0 or idx == len(data) - 1:
-            selected.append(idx)
-            continue
-        if l in top:
-            selected.append(idx)
-        elif l in middle:
-            if abs(labels[idx - 1] - l) <= 1 and abs(labels[idx + 1] - l) <= 1:
-                selected.extend([idx-1, idx, idx+1])
-        elif l in bottom:
-            if labels[idx - 1] == l and labels[idx + 1] == l:
-                selected.extend([idx-1, idx, idx+1])
-        else:
-            raise ("something wrong")
-        if len(set(selected)) >= budget:
-            break
+    selected, labels = select_tokens_with_rules(labels, rule, budget)
+
     recent = [i for i in range(len(data))][-int(len(data) * 0.1):]
+    labels[recent[0]:] = [-1] * len(recent)
     selected.extend(recent)
+
     selected = list(set(selected))
-    print(f"len of seleted: {len(selected)}, selected: {selected}")
+    if len(selected) < budget:
+        selected_leftover, labels = select_tokens_with_rules(labels, [], budget-len(selected))
+        selected.extend(selected_leftover)
+    print(f"len of selected: {len(selected)}, selected: {selected}")
     return selected
 
 

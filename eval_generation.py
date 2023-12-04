@@ -35,7 +35,7 @@ def nvidia_smi():
 batch_size = 1
 model_name = "NousResearch/Llama-2-13b-hf"
 # model_name = "/home/ubuntu/hummingbird/data/llama2-70b-hf"
-r = 0.8
+r = 0.5
 mode = str(sys.argv[1])
 
 
@@ -47,7 +47,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 kwargs = {
     "attention_sink_size": 4,
     "attention_sink_window_size": 252,  # default: 1020
-    "attention_sink_mode": mode # -1: HF; 0: original attn sink; 1: sink recent; 2: ranking based; 3: our
+    "attention_sink_mode": mode # -1: HF  0: original attn sink  1: sink recent  2: ranking based  3: our
 }
 model = pruned_LlamaForCausalLM.from_pretrained(
    model_name, 
@@ -99,10 +99,10 @@ def prompt_pruning(inputs, mode, rate):
                 )
         attn_w = torch.sum(outputs.attentions[-1].squeeze(), dim=1)
         attn_w = torch.sum(attn_w, dim=0)
-        df = pd.DataFrame(attn_w.detach().cpu().numpy())
-        prompt_w_path = "/home/ubuntu/shrink_kv/results/seq_{}_layer.csv".format(inputs.size(1))
-        df.to_csv(prompt_w_path)
-        selected = prompt_token_selection(prompt_w_path, rate=rate)
+        # df = pd.DataFrame(attn_w.detach().cpu().numpy())
+        # prompt_w_path = "/home/ubuntu/shrink_kv/results/seq_{}_layer.csv".format(inputs.size(1))
+        # df.to_csv(prompt_w_path)
+        selected = prompt_token_selection(attn_w, rate=rate)
         inputs = inputs[:,selected]
 
 model.eval()
@@ -128,9 +128,9 @@ model.resize_token_embeddings(len(tokenizer))
 dataset = load_dataset('lambada', split='validation[:100]')
 iterations = 1
 max_tokens = 128
+
+
 print("start...")
-
-
 
 results = OrderedDict()
 for inp in dataset:
