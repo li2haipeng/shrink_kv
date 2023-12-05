@@ -128,7 +128,7 @@ class InjectAttentionSinksMixin:
                 outputs = old_forward(*args, **kwargs)
                 
                 if mode == "2":
-                    # print("our mode")
+                    # print("rank mode")
                     module.update_kv_cache = UpdateKVCache(outputs.attentions)
                 elif mode == "1":
                     # print("sink recent mode")
@@ -136,9 +136,9 @@ class InjectAttentionSinksMixin:
                 elif mode == "0":
                     # print("original attn sink")
                     module.update_kv_cache = AttentionSinkKVCache(**attention_sink_kwargs)
-                else:
-                    # print("transformers mode")
-                    pass
+                elif mode == "3":
+                    # print("our mode")
+                    module.update_kv_cache = SinkRencent(**attention_sink_kwargs)
                 outputs.past_key_values = self.update_kv_cache(outputs.past_key_values)
                 # print(outputs.past_key_values[0][0].size())
                 return outputs

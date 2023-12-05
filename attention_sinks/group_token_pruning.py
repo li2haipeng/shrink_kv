@@ -118,32 +118,37 @@ class UpdateKVCache:
         return pruned_next_cache
 
 
-def prompt_token_selection(attn_w, rate):
+def prompt_token_selection(attn_w, rate, recent):
     if type(attn_w) == str:
         d = pd.read_csv(w_path, index_col=0)
         attn_w = d.values.transpose()[0]
 
     groups = int(len(attn_w)/5)
     jnb = JenksNaturalBreaks(groups)
+    # print(attn_w)
     jnb.fit(attn_w)
     labels = jnb.labels_.tolist()
-    print(labels)
+    # print(labels)
     budget = int(len(attn_w) * rate)
     candidates = [i for i in range(groups)]
     top, middle, bottom = selection_rules(candidates)
     rule = [top, middle, bottom]
 
-    selected, labels = select_tokens_with_rules(labels, rule, budget)
-
-    recent = [i for i in range(len(attn_w))][-int(len(attn_w) * 0.1):]
+    recent = [i for i in range(len(attn_w))][-int(len(attn_w) * recent):]
     labels[recent[0]:] = [-1] * len(recent)
-    selected.extend(recent)
+    selected = recent
+    selected.extend([0,1,2,3])
+
+    # leftover_budget = budget-len(selected)
+    groupd_selected, labels = select_tokens_with_rules(labels, rule, budget-len(selected))
+    selected.extend(groupd_selected)
 
     selected = list(set(selected))
     if len(selected) < budget:
         selected_leftover, labels = select_tokens_with_rules(labels, [], budget-len(selected))
         selected.extend(selected_leftover)
-    print(f"len of selected: {len(selected)}, selected: {selected}")
+    selected = sorted(selected)
+    # print(f"len of selected: {len(selected)}, selected: {selected}")
     return selected
 
 

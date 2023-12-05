@@ -9,9 +9,9 @@ bertscore = load("bertscore")
 outputs = OrderedDict()
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
-
-f_a = open('/home/ubuntu/shrink_kv/hf_128_llama2-70b-hf.json')
-f_b = open('/home/ubuntu/shrink_kv/mode_2_128_r_0.5_llama2-70b-hf.json')
+f_a = open('/home/ubuntu/shrink_kv/hf_Llama-2-13b-hf.json')
+# f_a = open('/home/ubuntu/shrink_kv/hf_128_llama2-70b-hf.json')
+f_b = open('/home/ubuntu/shrink_kv/mode_3_128_budget_0.8_recent_0.2_Llama-2-13b-hf.json')
 
 ref_data = json.load(f_a)
 test_data = json.load(f_b)

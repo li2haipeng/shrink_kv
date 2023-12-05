@@ -35,8 +35,10 @@ def nvidia_smi():
 batch_size = 1
 model_name = "NousResearch/Llama-2-13b-hf"
 # model_name = "/home/ubuntu/hummingbird/data/llama2-70b-hf"
-r = 0.5
+
 mode = str(sys.argv[1])
+r = float(sys.argv[2])
+rec = float(sys.argv[3])
 
 
 m = model_name.split("/")[-1]
@@ -98,12 +100,14 @@ def prompt_pruning(inputs, mode, rate):
                     return_dict=True,
                 )
         attn_w = torch.sum(outputs.attentions[-1].squeeze(), dim=1)
-        attn_w = torch.sum(attn_w, dim=0)
+        attn_w = torch.sum(attn_w, dim=0).cpu().detach().numpy()
         # df = pd.DataFrame(attn_w.detach().cpu().numpy())
         # prompt_w_path = "/home/ubuntu/shrink_kv/results/seq_{}_layer.csv".format(inputs.size(1))
         # df.to_csv(prompt_w_path)
-        selected = prompt_token_selection(attn_w, rate=rate)
-        inputs = inputs[:,selected]
+    
+        selected = prompt_token_selection(attn_w, rate=rate, recent=rec)
+        print(f"len: {inputs.size(1)}, pruned len: {inputs[:,selected].size(1)}")
+        return inputs[:,selected]
 
 model.eval()
 model.config.output_attentions = True
@@ -162,5 +166,5 @@ for inp in dataset:
     print(f"======={len(results), time.time()-t0}====================")
 
 m = model_name.split("/")[-1]
-with open(f"mode_{mode}_{max_tokens}_r_{r}_{m}.json", 'w') as f:
+with open(f"mode_{mode}_{max_tokens}_budget_{r}_recent_{rec}_{m}.json", 'w') as f:
     f.write(json.dumps(results))
