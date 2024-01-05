@@ -5,7 +5,7 @@ from transformers import PreTrainedModel
 from transformers.utils import logging
 
 from attention_sinks.attention_sink_kv_cache import AttentionSinkKVCache
-from attention_sinks.group_token_pruning import UpdateKVCache, SinkRencent
+from attention_sinks.group_token_pruning import UpdateKVCache, SinkRencent, GroupSelection
 from attention_sinks.generation.utils import _update_model_kwargs_for_generation
 
 logger = logging.get_logger(__name__)
@@ -138,7 +138,7 @@ class InjectAttentionSinksMixin:
                     module.update_kv_cache = AttentionSinkKVCache(**attention_sink_kwargs)
                 elif mode == "3":
                     # print("our mode")
-                    module.update_kv_cache = SinkRencent(**attention_sink_kwargs)
+                    module.update_kv_cache = GroupSelection(outputs.attentions)
                 outputs.past_key_values = self.update_kv_cache(outputs.past_key_values)
                 # print(outputs.past_key_values[0][0].size())
                 return outputs

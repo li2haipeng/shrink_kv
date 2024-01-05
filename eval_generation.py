@@ -9,7 +9,7 @@ import sys
 from datasets import load_dataset
 sys.path.append("..")
 import torch.distributed as dist
-from attention_sinks.group_token_pruning import prompt_token_selection
+from attention_sinks.group_token_pruning import prompt_token_selection, word_selection
 from collections import OrderedDict
 import json
 # from token_pruning_llama import LlamaForCausalLM
@@ -59,13 +59,15 @@ model = pruned_LlamaForCausalLM.from_pretrained(
    **kwargs,
 )
 
-def prompt_pruning(inputs, mode, rate):
+def prompt_pruning(inp_text, tokenizer, mode, rate):
+    inputs = tokenizer(inp_text, return_tensors="pt")["input_ids"]
     prompt_len = inputs.size(1)
     budgets = int(prompt_len * r)
 
     if mode == "1":
-        print(f"len: {inputs.size(1)}, pruned len: {inputs[:, prompt_len - budgets:].size(1)}")
-        return inputs[:, prompt_len - budgets:]
+        # print(f"len: {inputs.size(1)}, pruned len: {inputs[:, prompt_len - budgets:].size(1)}")
+        print(f"pruning rate: {(inputs[:, prompt_len - budgets:].size(1) + 4) / inputs.size(1)}")
+        return torch.cat([inputs[:, :4], inputs[:, prompt_len - budgets:]], dim=1)
     
     elif mode == "2":
         position_ids = torch.arange(len(inputs[0]), dtype=torch.float16, device=model.device)
@@ -84,7 +86,8 @@ def prompt_pruning(inputs, mode, rate):
         attn_w = torch.sum(attn_w, dim=0)
         selected = np.argsort(attn_w.cpu().detach().numpy())[::-1][:budgets]
         selected = np.sort(selected)
-        print(f"len: {inputs.size(1)}, pruned len: {inputs[:,selected].size(1)}")
+        # print(f"len: {inputs.size(1)}, pruned len: {inputs[:,selected].size(1)}")
+        print(f"pruning rate: {inputs[:,selected].size(1) / inputs.size(1)}")
         return inputs[:,selected]
     elif mode == "3":
         position_ids = torch.arange(len(inputs[0]), dtype=torch.float16, device=model.device)
@@ -105,8 +108,10 @@ def prompt_pruning(inputs, mode, rate):
         # prompt_w_path = "/home/ubuntu/shrink_kv/results/seq_{}_layer.csv".format(inputs.size(1))
         # df.to_csv(prompt_w_path)
     
-        selected = prompt_token_selection(attn_w, rate=rate, recent=rec)
-        print(f"len: {inputs.size(1)}, pruned len: {inputs[:,selected].size(1)}")
+        # selected = prompt_token_selection(attn_w, rate=rate, recent=rec)
+        selected = word_selection(inp_text, tokenizer, attn_w, rate, rec)
+        # print(f"len: {inputs.size(1)}, pruned len: {inputs[:,selected].size(1)}")
+        print(f"pruning rate: {inputs[:,selected].size(1) / inputs.size(1)}")
         return inputs[:,selected]
 
 model.eval()
@@ -139,9 +144,8 @@ print("start...")
 results = OrderedDict()
 for inp in dataset:
     inp_text = inp['text']
-    inputs = tokenizer(inp_text, return_tensors="pt")["input_ids"]
-
-    inputs = prompt_pruning(inputs, mode, r)
+    
+    inputs = prompt_pruning(inp_text, tokenizer, mode, r)
 
     print(f"Prompt (ori): {inp_text}\n")
 
@@ -166,5 +170,5 @@ for inp in dataset:
     print(f"======={len(results), time.time()-t0}====================")
 
 m = model_name.split("/")[-1]
-with open(f"mode_{mode}_{max_tokens}_budget_{r}_recent_{rec}_{m}.json", 'w') as f:
+with open(f"v2_mode_{mode}_{max_tokens}_budget_{r}_recent_{rec}_{m}.json", 'w') as f:
     f.write(json.dumps(results))
